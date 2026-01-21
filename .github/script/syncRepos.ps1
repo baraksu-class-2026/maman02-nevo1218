@@ -90,6 +90,13 @@ function Update-Repos {
 
         git merge teacher/main
 
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host "  Failed to merge teacher/main into $clientRepo" -ForegroundColor Red
+            Write-Host "  There may be merge conflicts that need to be resolved manually" -ForegroundColor Yellow
+            Set-Location ".."
+            continue
+        }
+
         git push
 
         Set-Location ".."
@@ -133,21 +140,6 @@ function Update-MyRepos {
             Write-Host "  Failed to fetch from $originName" -ForegroundColor Red
             continue
         }
-
-        # Check GitHub Actions status
-        # $workflowStatus = gh run list -R baraksu-class-2026/$clientRepo --limit 1 --json conclusion --jq '.[0].conclusion' 2>&1
-        
-        # if ($LASTEXITCODE -ne 0) {
-        #     Write-Host "  Failed to check workflow status for $clientRepo" -ForegroundColor Red
-        #     continue
-        # }
-
-        # if ($workflowStatus -ne "success") {
-        #     Write-Host "  Last workflow run for $clientRepo is not successful (status: $workflowStatus). Skipping." -ForegroundColor Yellow
-        #     continue
-        # }
-
-        # Write-Host "  Last workflow run passed. Proceeding..." -ForegroundColor Green
 
         foreach ($className in @("HotelUserTester", "HotelRoomUserTester")) {
 
@@ -453,10 +445,60 @@ function Get-LastWorkingUsers {
     }
 }
 
+function Print-LastGrade {
+    param (
+        [string]$unit,
+        [array]$users
+    )
+
+    Set-Location $workingDir
+    # Iterate over each repository
+    foreach ($user in $users) {
+
+        Write-Host "Processing repository: $clientRepo" -ForegroundColor Cyan
+
+        $clientRepo = $unit + '-' + $user
+        
+        if (-not (Test-Path $clientRepo)) {
+            
+            git clone --quiet $classroomUrl/$clientRepo.git 2>&1 | Out-Null
+            
+            if (-not (Test-Path $clientRepo)) {
+                continue
+            }
+
+        }
+
+        Set-Location $clientRepo
+
+        git pull --quiet 2>&1 | Out-Null
+
+        # Print grade badge content if exists
+        $gradeBadgePath = ".github\badges\grade.md"
+        if (Test-Path $gradeBadgePath) {
+            $userName = $userDictionary."@$($user)"
+            if ($userName) {
+                $reversedName = -join $userName[-1..-$userName.Length]
+                $displayName = $reversedName
+            } else {
+                $displayName = "@$user"
+            }
+            $gradeContent = Get-Content $gradeBadgePath -Raw
+            Write-Host "Grade $displayName, $classroomUrl/$clientRepo " -ForegroundColor Cyan
+            Write-Host $gradeContent -ForegroundColor Green
+        }
+        
+        Set-Location ".."
+
+
+    }
+}
+
 # Call the function
 # Update-Repos -unit $unit -users $users
 # Update-MyRepos -unit $unit -users $users
 # Update-Secrets -unit $unit -users $users
 # Check-ReposDoesExist -unit $unit -users $users
 # Create-LocalTestrs -unit $unit -users $users
-Get-LastWorkingUsers -unit $unit -users $users -n 10 
+# Get-LastWorkingUsers -unit $unit -users $users -n 10 -Descending
+# Print-LastGrade  -unit $unit -users $users 
